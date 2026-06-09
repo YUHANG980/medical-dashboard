@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智慧医疗数据分析与居民健康监测平台</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <style>
+        :root {
+            --bg: #0a0e17;
+            --panel-bg: #111827;
+            --border: #1e293b;
+            --text: #e2e8f0;
+            --text-secondary: #94a3b8;
+            --accent: #38bdf8;
+            --accent2: #34d399;
+            --accent3: #f59e0b;
+            --accent4: #f472b6;
+            --accent5: #a78bfa;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', sans-serif;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* 顶部标题栏 */
+        .header {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            border-bottom: 2px solid var(--accent);
+            padding: 16px 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .header h1 {
+            font-size: 22px;
+            font-weight: 600;
+            background: linear-gradient(90deg, var(--accent), var(--accent2));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: 2px;
+        }
+
+        .header .subtitle {
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+
+        /* 筛选器 */
+        .filters {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .filters label {
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+
+        .filters select {
+            background: var(--panel-bg);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 13px;
+            cursor: pointer;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .filters select:focus {
+            border-color: var(--accent);
+        }
+
+        .btn-refresh {
+            background: var(--accent);
+            color: #0a0e17;
+            border: none;
+            border-radius: 6px;
+            padding: 7px 18px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .btn-refresh:hover { opacity: 0.85; }
+
+        /* 主网格 */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: auto auto;
+            gap: 16px;
+            padding: 20px 24px;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        /* 图表面板 */
+        .chart-panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            min-height: 380px;
+            transition: border-color 0.3s;
+        }
+
+        .chart-panel:hover {
+            border-color: rgba(56, 189, 248, 0.3);
+        }
+
+        .chart-panel.full-width {
+            grid-column: span 3;
+        }
+
+        .chart-panel.span-2 {
+            grid-column: span 2;
+        }
+
+        .chart-panel .panel-title {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .chart-panel .panel-title .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .chart-panel .panel-desc {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+        }
+
+        .chart-container {
+            flex: 1;
+            min-height: 320px;
+        }
+
+        /* 响应式 */
+        @media (max-width: 1200px) {
+            .dashboard-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .chart-panel.full-width { grid-column: span 2; }
+            .chart-panel.span-2 { grid-column: span 2; }
+        }
+
+        @media (max-width: 768px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+            .chart-panel.full-width,
+            .chart-panel.span-2 { grid-column: span 1; }
+        }
+
+        /* 加载指示器 */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .loading::after {
+            content: '';
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-left: 10px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* 底部信息条 */
+        .footer {
+            text-align: center;
+            padding: 12px;
+            color: var(--text-secondary);
+            font-size: 12px;
+            border-top: 1px solid var(--border);
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div>
+        <h1>🏥 智慧医疗数据分析与居民健康监测平台</h1>
+        <div class="subtitle">基于 Hadoop HA + Hive 数仓 + Spring Boot + ECharts | 数据来源：区域医疗电子病历 & 慢病随访系统</div>
+    </div>
+    <div class="filters">
+        <label>年份：</label>
+        <select id="yearFilter">
+            <option value="">全部</option>
+            <option value="2023">2023</option>
+            <option value="2024">2024</option>
+            <option value="2025" selected>2025</option>
+        </select>
+        <label>月份：</label>
+        <select id="monthFilter">
+            <option value="">全部</option>
+        </select>
+        <button class="btn-refresh" onclick="refreshAll()">🔄 刷新数据</button>
+    </div>
+</div>
+
+<div class="dashboard-grid">
+    <!-- 上半部分：3 列 -->
+    <div class="chart-panel">
+        <div class="panel-title"><span class="dot" style="background:var(--accent)"></span>疾病季节性趋势</div>
+        <div class="panel-desc">各疾病大类按月就诊人次变化（堆积面积图）</div>
+        <div id="chart1" class="chart-container"></div>
+    </div>
+
+    <div class="chart-panel">
+        <div class="panel-title"><span class="dot" style="background:var(--accent2)"></span>药品消耗预测</div>
+        <div class="panel-desc">实际消耗 vs 预测消耗对比（柱状图 + 趋势线）</div>
+        <div id="chart2" class="chart-container"></div>
+    </div>
+
+    <div class="chart-panel">
+        <div class="panel-title"><span class="dot" style="background:var(--accent3)"></span>科室工作量排名</div>
+        <div class="panel-desc">各科室就诊人次占比（南丁格尔玫瑰图）</div>
+        <div id="chart3" class="chart-container"></div>
+    </div>
+
+    <!-- 下半部分：左 2/3 + 右 1/3 -->
+    <div class="chart-panel span-2">
+        <div class="panel-title"><span class="dot" style="background:var(--accent4)"></span>区域疾病分布</div>
+        <div class="panel-desc">各区域不同疾病就诊人次（堆叠横向柱状图）</div>
+        <div id="chart4" class="chart-container"></div>
+    </div>
+
+    <div class="chart-panel">
+        <div class="panel-title"><span class="dot" style="background:var(--accent5)"></span>慢病随访监测</div>
+        <div class="panel-desc">随访率 & 控制达标率（仪表盘 + 柱状图）</div>
+        <div id="chart5" class="chart-container"></div>
+    </div>
+</div>
+
+<div class="footer">
+    © 2026 智慧医疗数据分析平台 | 基于 Hadoop HA 高可用集群 | ZooKeeper + Hive + Sqoop + Spring Boot + ECharts
+</div>
+
+<script>
+    // ========================================
+    // 全局配置
+    // ========================================
+    const API_BASE = 'http://localhost:8090/api';
+    const chartInstances = {};
+
+    // 颜色板
+    const COLORS = ['#38bdf8', '#34d399', '#f59e0b', '#f472b6', '#a78bfa', '#fb923c', '#4ade80', '#e879f9', '#67e8f9'];
+
+    // 初始化月份下拉框
+    (function initMonthFilter() {
+        const sel = document.getElementById('monthFilter');
+        for (let i = 1; i <= 12; i++) {
+            const opt = document.createElement('option');
+            opt.value = i;
+            opt.textContent = i + '月';
+            sel.appendChild(opt);
+        }
+    })();
+
+    // ========================================
+    // 通用工具函数
+    // ========================================
+    function getParams() {
+        const year = document.getElementById('yearFilter').value;
+        const month = document.getElementById('monthFilter').value;
+        const params = new URLSearchParams();
+        if (year) params.append('year', year);
+        if (month) params.append('month', month);
+        return params.toString();
+    }
+
+    async function fetchData(endpoint) {
+        const query = getParams();
+        const url = `${API_BASE}/${endpoint}${query ? '?' + query : ''}`;
+        const resp = await fetch(url);
+        const json = await resp.json();
+        if (json.code === 200) {
+            return json.data;
+        }
+        console.error('API error:', json);
+        return [];
+    }
+
+    function getChart(domId) {
+        if (!chartInstances[domId]) {
+            const dom = document.getElementById(domId);
+            chartInstances[domId] = echarts.init(dom, 'dark');
+            window.addEventListener('resize', () => chartInstances[domId]?.resize());
+        }
+        return chartInstances[domId];
+    }
+
+    // ========================================
+    // 图表 1：疾病季节性趋势 → 堆积面积图
+    // ========================================
+    async function loadChart1() {
+        const data = await fetchData('disease/trend');
+        const chart = getChart('chart1');
+
+        if (!data || data.length === 0) {
+            chart.setOption({ title: { text: '暂无数据', left: 'center', top: 'center', textStyle: { color: '#94a3b8', fontSize: 14 } } });
+            chart.resize();
+            return;
+        }
+
+        // 按疾病类别分组
+        const diseaseMap = new Map();
+        data.forEach(d => {
+            const key = d.diseaseCategory;
+            if (!diseaseMap.has(key)) diseaseMap.set(key, []);
+            diseaseMap.get(key).push(d);
+        });
+
+        // 构建 X 轴（时间标签）
+        const timeSet = new Set();
+        data.forEach(d => timeSet.add(d.statYear + '-' + String(d.statMonth).padStart(2, '0')));
+        const times = [...timeSet].sort();
+
+        // 构建每个疾病类别的系列数据
+        const diseases = [...diseaseMap.keys()];
+        const series = diseases.map((disease, idx) => {
+            const records = diseaseMap.get(disease);
+            const timeMap = new Map();
+            records.forEach(r => {
+                timeMap.set(r.statYear + '-' + String(r.statMonth).padStart(2, '0'), r.visitCount);
+            });
+            return {
+                name: disease,
+                type: 'line',
+                stack: '总量',
+                areaStyle: { opacity: 0.5 },
+                emphasis: { focus: 'series' },
+                data: times.map(t => timeMap.get(t) || 0),
+                smooth: true,
+                lineStyle: { width: 2 },
+                symbol: 'circle',
+                symbolSize: 3,
+            };
+        });
+
+        chart.setOption({
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: { type: 'cross' },
+            },
+            legend: {
+                top: 5,
+                textStyle: { color: '#94a3b8', fontSize: 11 },
+                type: 'scroll',
+            },
+            grid: { left: 55, right: 20, top: 40, bottom: 50 },
+            xAxis: {
+                type: 'category',
+                data: times,
+                axisLabel: { color: '#94a3b8', fontSize: 10, rotate: 45 },
+                axisLine: { lineStyle: { color: '#1e293b' } },
+            },
+            yAxis: {
+                type: 'value',
+                name: '就诊人次',
+                nameTextStyle: { color: '#94a3b8', fontSize: 11 },
+                axisLabel: { color: '#94a3b8', fontSize: 10 },
+                splitLine: { lineStyle: { color: '#1e293b', type: 'dashed' } },
+            },
+            series: series,
+            color: COLORS,
+        }, true);
+        chart.resize();
+    }
+
+    // ========================================
+    // 图表 2：药品消耗预测 → 柱状图 + 折线图交叉
+    // ========================================
+    async function loadChart2() {
+        const data = await fetchData('drug/forecast');
+        const chart = getChart('chart2');
+
+        if (!data || data.length === 0) {
+            chart.setOption({ title: { text: '暂无数据', left: 'center', top: 'center', textStyle: { color: '#94a3b8', fontSize: 14 } } });
+            chart.resize();
+            return;
+        }
+
+        // 按药品名称聚合，取实际和预测的总量
+        const drugMap = new Map();
+        data.forEach(d => {
+            const key = d.drugName;
+            if (!drugMap.has(key)) drugMap.set(key, { actual: 0, forecast: 0 });
+            const acc = drugMap.get(key);
+            acc.actual += d.actualQty || 0;
+            acc.forecast += d.forecastQty || 0;
+        });
+
+        // 按实际消耗降序排列，取 Top 15
+        const sorted = [...drugMap.entries()]
+            .sort((a, b) => b[1].actual - a[1].actual)
+            .slice(0, 15);
+
+        const names = sorted.map(e => e[0].length > 6 ? e[0].substring(0, 5) + '…' : e[0]);
+        const actuals = sorted.map(e => e[1].actual);
+        const forecasts = sorted.map(e => e[1].forecast);
+
+        chart.setOption({
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: { type: 'shadow' },
+            },
+            legend: {
+                data: ['实际消耗', '预测消耗'],
+                bottom: 0,
+                textStyle: { color: '#94a3b8', fontSize: 11 },
+            },
+            grid: { left: 55, right: 45, top: 10, bottom: 75 },
+            xAxis: {
+                type: 'category',
+                data: names,
+                axisLabel: { color: '#94a3b8', fontSize: 10, rotate: 30 },
+                axisLine: { lineStyle: { color: '#1e293b' } },
+            },
+            yAxis: {
+                type: 'value',
+                name: '数量',
+                nameTextStyle: { color: '#94a3b8', fontSize: 11 },
+                axisLabel: { color: '#94a3b8', fontSize: 10 },
+                splitLine: { lineStyle: { color: '#1e293b', type: 'dashed' } },
+            },
+            series: [
+                {
+                    name: '实际消耗',
+                    type: 'bar',
+                    data: actuals,
+                    itemStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: '#34d399' },
+                            { offset: 1, color: '#059669' },
+                        ]),
+                        borderRadius: [4, 4, 0, 0],
+                    },
+                    barWidth: '40%',
+                },
+                {
+                    name: '预测消耗',
+                    type: 'line',
+                    data: forecasts,
+                    smooth: true,
+                    lineStyle: { color: '#f59e0b', width: 2, type: 'dashed' },
+                    symbol: 'diamond',
+                    symbolSize: 6,
+                    itemStyle: { color: '#f59e0b' },
+                },
+            ],
+        }, true);
+        chart.resize();
+    }
+
+    // ========================================
+    // 图表 3：科室工作量 → 南丁格尔玫瑰图
+    // ========================================
+    async function loadChart3() {
+        const data = await fetchData('dept/workload');
+        const chart = getChart('chart3');
+
+        if (!data || data.length === 0) {
+            chart.setOption({ title: { text: '暂无数据', left: 'center', top: 'center', textStyle: { color: '#94a3b8', fontSize: 14 } } });
+            chart.resize();
+            return;
+        }
+
+        // 按科室聚合（去重：同科室取最新月份的排名）
+        const deptMap = new Map();
+        data.forEach(d => {
+            const key = d.department;
+            if (!deptMap.has(key) || deptMap.get(key).statMonth < d.statMonth) {
+                deptMap.set(key, d);
+            }
+        });
+
+        const pieData = [...deptMap.values()]
+            .sort((a, b) => a.rankInMonth - b.rankInMonth)
+            .map(d => ({
+                name: d.department,
+                value: d.visitCount,
+            }));
+
+        chart.setOption({
+            tooltip: {
+                trigger: 'item',
+                formatter: '{b}<br/>就诊人次: {c}<br/>占比: {d}%',
+            },
+            legend: {
+                bottom: 0,
+                textStyle: { color: '#94a3b8', fontSize: 10 },
+                type: 'scroll',
+            },
+            series: [
+                {
+                    type: 'pie',
+                    radius: ['25%', '75%'],
+                    center: ['50%', '48%'],
+                    roseType: 'area',
+                    itemStyle: { borderRadius: 4 },
+                    data: pieData,
+                    label: { color: '#94a3b8', fontSize: 10, formatter: '{b}' },
+                    emphasis: {
+                        label: { fontSize: 14, fontWeight: 'bold' },
+                    },
+                },
+            ],
+            color: COLORS,
+        }, true);
+        chart.resize();
+    }
+
+    // ========================================
+    // 图表 4：区域疾病分布 → 堆叠横向柱状图
+    // ========================================
+    async function loadChart4() {
+        const data = await fetchData('regional/distribution');
+        const chart = getChart('chart4');
+
+        if (!data || data.length === 0) {
+            chart.setOption({ title: { text: '暂无数据', left: 'center', top: 'center', textStyle: { color: '#94a3b8', fontSize: 14 } } });
+            chart.resize();
+            return;
+        }
+
+        // 获取区域列表
+        const regions = [...new Set(data.map(d => d.region))];
+        // 获取疾病类别列表
+        const diseases = [...new Set(data.map(d => d.diseaseCategory))];
+
+        // 构建系列
+        const series = diseases.map(disease => {
+            const regionMap = new Map();
+            data.forEach(d => {
+                if (d.diseaseCategory === disease) {
+                    regionMap.set(d.region, (regionMap.get(d.region) || 0) + d.visitCount);
+                }
+            });
+            return {
+                name: disease,
+                type: 'bar',
+                stack: 'total',
+                emphasis: { focus: 'series' },
+                data: regions.map(r => regionMap.get(r) || 0),
+            };
+        });
+
+        chart.setOption({
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: { type: 'shadow' },
+            },
+            legend: {
+                bottom: 0,
+                textStyle: { color: '#94a3b8', fontSize: 10 },
+                type: 'scroll',
+            },
+            grid: { left: 85, right: 30, top: 10, bottom: 55 },
+            xAxis: {
+                type: 'value',
+                name: '就诊人次',
+                nameTextStyle: { color: '#94a3b8', fontSize: 11 },
+                axisLabel: { color: '#94a3b8', fontSize: 10 },
+                splitLine: { lineStyle: { color: '#1e293b', type: 'dashed' } },
+            },
+            yAxis: {
+                type: 'category',
+                data: regions,
+                axisLabel: { color: '#94a3b8', fontSize: 10 },
+                axisLine: { lineStyle: { color: '#1e293b' } },
+            },
+            series: series,
+            color: COLORS,
+        }, true);
+        chart.resize();
+    }
+
+    // ========================================
+    // 图表 5：慢病随访监测 → 柱状图 + 双指标
+    // ========================================
+    async function loadChart5() {
+        const data = await fetchData('chronic/monitor');
+        const chart = getChart('chart5');
+
+        if (!data || data.length === 0) {
+            chart.setOption({ title: { text: '暂无数据', left: 'center', top: 'center', textStyle: { color: '#94a3b8', fontSize: 14 } } });
+            chart.resize();
+            return;
+        }
+
+        const diseases = data.map(d => d.diseaseName);
+        const followupRates = data.map(d => Number(d.followupRate) || 0);
+        const controlRates = data.map(d => Number(d.controlRate) || 0);
+
+        chart.setOption({
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: { type: 'shadow' },
+            },
+            legend: {
+                data: ['随访率(%)', '控制达标率(%)'],
+                bottom: 0,
+                textStyle: { color: '#94a3b8', fontSize: 11 },
+            },
+            grid: { left: 55, right: 55, top: 30, bottom: 65 },
+            xAxis: {
+                type: 'category',
+                data: diseases,
+                axisLabel: { color: '#94a3b8', fontSize: 10 },
+                axisLine: { lineStyle: { color: '#1e293b' } },
+            },
+            yAxis: [
+                {
+                    type: 'value',
+                    name: '随访率(%)',
+                    min: 0,
+                    max: 100,
+                    nameTextStyle: { color: '#a78bfa', fontSize: 11 },
+                    axisLabel: { color: '#94a3b8', fontSize: 10, formatter: '{value}%' },
+                    splitLine: { lineStyle: { color: '#1e293b', type: 'dashed' } },
+                },
+                {
+                    type: 'value',
+                    name: '控制达标率(%)',
+                    min: 0,
+                    max: 100,
+                    nameTextStyle: { color: '#f472b6', fontSize: 11 },
+                    axisLabel: { color: '#94a3b8', fontSize: 10, formatter: '{value}%' },
+                    splitLine: { show: false },
+                },
+            ],
+            series: [
+                {
+                    name: '随访率(%)',
+                    type: 'bar',
+                    data: followupRates,
+                    itemStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: '#a78bfa' },
+                            { offset: 1, color: '#7c3aed' },
+                        ]),
+                        borderRadius: [4, 4, 0, 0],
+                    },
+                    barWidth: '45%',
+                    markLine: {
+                        silent: true,
+                        data: [{ type: 'average', name: '平均随访率', label: { fontSize: 10 } }],
+                        lineStyle: { color: '#a78bfa', type: 'dotted' },
+                    },
+                },
+                {
+                    name: '控制达标率(%)',
+                    type: 'bar',
+                    yAxisIndex: 1,
+                    data: controlRates,
+                    itemStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: '#f472b6' },
+                            { offset: 1, color: '#db2777' },
+                        ]),
+                        borderRadius: [4, 4, 0, 0],
+                    },
+                    barWidth: '45%',
+                },
+            ],
+        }, true);
+        chart.resize();
+    }
+
+    // ========================================
+    // 加载所有图表 & 刷新
+    // ========================================
+    async function refreshAll() {
+        // 先销毁旧图表实例，清缓存
+        Object.keys(chartInstances).forEach(id => {
+            chartInstances[id].dispose();
+            delete chartInstances[id];
+        });
+
+        // 给每个图表容器设置加载中状态
+        ['chart1', 'chart2', 'chart3', 'chart4', 'chart5'].forEach(id => {
+            const dom = document.getElementById(id);
+            dom.innerHTML = '<div class="loading">加载中</div>';
+        });
+
+        try {
+            await Promise.all([
+                loadChart1(),
+                loadChart2(),
+                loadChart3(),
+                loadChart4(),
+                loadChart5(),
+            ]);
+            console.log('✅ 所有图表加载完成');
+        } catch (err) {
+            console.error('❌ 图表加载失败:', err);
+        }
+    }
+
+    // 监听筛选器变化，自动刷新
+    document.getElementById('yearFilter').addEventListener('change', refreshAll);
+    document.getElementById('monthFilter').addEventListener('change', refreshAll);
+
+    // 页面加载时自动渲染
+    window.addEventListener('DOMContentLoaded', () => {
+        refreshAll();
+    });
+</script>
+</body>
+</html>
