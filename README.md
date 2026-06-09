@@ -8,7 +8,7 @@
 
 ## 📸 项目截图
 
-![首页大屏](screenshots/dashboard.png)
+![首页大屏](C:\Users\lx\Desktop\0982cb4f28ea7afa0afdcdfbb67ac7b7.jpg)
 
 ---
 
